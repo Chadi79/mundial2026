@@ -70,6 +70,25 @@ body{background:linear-gradient(160deg,#0d1b2e 0%,#112240 50%,#0d1b2e 100%);colo
 .grplink:hover{background:#1e3a5f;color:#cce4ff}
 
 .last-upd{text-align:center;font-size:11px;color:var(--muted);margin-top:30px}
+.sim-wrap{position:relative}.sim-rounds{display:flex;gap:0;padding-bottom:12px;position:relative;width:100%}
+.sim-round{flex:1;display:flex;flex-direction:column;position:relative;min-width:0}
+.sim-round-hdr{text-align:center;padding:8px 4px;font-size:10px;font-weight:700;letter-spacing:.8px;color:var(--green);background:var(--bg2);border-bottom:1px solid var(--border);border-right:1px solid var(--border)}
+.sim-matches{display:flex;flex-direction:column;flex:1;justify-content:space-around;padding:6px 3px;position:relative}
+.sim-match{background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin:3px;overflow:hidden;padding:6px 6px;min-width:0}
+.sim-match.is-confirmed{border-color:rgba(0,198,122,.4)}
+.sim-slot{margin-bottom:5px}
+.sim-slot:last-of-type{margin-bottom:0}
+.sim-team{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.sim-name{font-size:11px;color:var(--text);display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sim-pct{font-size:10px;font-weight:700;color:var(--green);min-width:30px;text-align:right}
+.sim-bar-track{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:4px}
+.sim-bar-fill{height:100%;border-radius:2px;transition:width .8s}
+.sim-vs{text-align:center;font-size:9px;color:var(--muted);padding:2px 0}
+.sim-confirmed{font-size:9px;color:var(--green);text-align:center;padding:2px 0}
+.sim-final-winner{background:rgba(0,198,122,.08);border:1px solid var(--green);border-radius:10px;padding:12px;text-align:center;margin:8px 3px}
+.sim-trophy{font-size:28px;margin-bottom:4px}
+.sim-winner-name{font-size:14px;font-weight:700;color:var(--green);margin-bottom:2px}
+.sim-winner-pct{font-size:11px;color:var(--muted)}
 .bconf{display:flex;align-items:center;gap:4px;margin:0 7px 3px}
 .bconf-track{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
 .bconf-fill{height:100%;border-radius:2px;transition:width .6s}
@@ -97,6 +116,7 @@ body{background:linear-gradient(160deg,#0d1b2e 0%,#112240 50%,#0d1b2e 100%);colo
     <div class="tabs">
       <button class="tab active" onclick="showTab('grupos')">Grupos</button>
       <button class="tab" onclick="showTab('bracket')">Bracket completo</button>
+      <button class="tab" onclick="showTab('simulacion')">Simulación</button>
     </div>
   </div>
 </div>
@@ -113,6 +133,20 @@ body{background:linear-gradient(160deg,#0d1b2e 0%,#112240 50%,#0d1b2e 100%);colo
     <div class="info-box"><span style="font-size:16px">&#8505;</span>
     <div>Bracket oficial FIFA 2026. Los cruces de 16avos son fijos. Equipos TBD se completan al terminar grupos (27 jun). Clic en <strong>Gr.X</strong> para ver la tabla del grupo.</div></div>
     <div class="bwrap"><div class="bracket" id="bracketEl"></div></div>
+  </div>
+  <div id="tab-simulacion" style="display:none">
+    <div class="info-box">
+      <span style="font-size:16px">&#127922;</span>
+      <div>
+        <strong style="color:var(--amber)">Simulación Monte Carlo &mdash; 10.000 partidos simulados</strong><br>
+        Combina el <strong>ranking FIFA</strong> (jun 2026) con el <strong>rendimiento en el torneo</strong> (goles, victorias, diferencia) para estimar quién llega a cada ronda.
+        Las barras muestran la probabilidad de que ese equipo ocupe ese slot. Se recalcula automáticamente con cada resultado nuevo.
+      </div>
+    </div>
+    <div id="simStatus" style="text-align:center;padding:20px;font-size:12px;color:var(--muted)">Calculando simulaciones...</div>
+    <div id="simBracket" style="display:none">
+      <div class="sim-wrap"><div class="sim-rounds" id="simRounds"></div></div>
+    </div>
   </div>
   <div class="last-upd" id="dataCredit"></div>
 </div>
@@ -131,8 +165,11 @@ function showTab(t){
   var tabs=document.querySelectorAll('.tab');
   tabs[0].classList.toggle('active',t==='grupos');
   tabs[1].classList.toggle('active',t==='bracket');
+  tabs[2].classList.toggle('active',t==='simulacion');
   document.getElementById('tab-grupos').style.display=t==='grupos'?'':'none';
   document.getElementById('tab-bracket').style.display=t==='bracket'?'':'none';
+  document.getElementById('tab-simulacion').style.display=t==='simulacion'?'':'none';
+  if(t==='simulacion'&&!simDone)runSimulation();
 }
 function goToGroup(g){
   showTab('grupos');
@@ -305,6 +342,7 @@ function renderBracket(){
   buildRound(el,'3° PUESTO & FINAL',[{num:103,t1:LSF(101),t2:LSF(102),date:'18 jul - Miami'},{num:104,t1:WSF(101),t2:WSF(102),date:'19 jul - New York'}],'fin');
 }
 function renderAll(){
+  simDone=false;
   renderGroups();renderBracket();
   var today=new Date().toISOString().split('T')[0];
   var live=matches.filter(function(m){return m.date===today&&(!m.score||!m.score.ft);});
@@ -323,6 +361,343 @@ function applyData(data,src){
   renderAll();
 }
 var STANDINGS_ORDER={"A": ["Mexico", "South Korea", "Czech Republic", "South Africa"], "B": ["Canada", "Switzerland", "Bosnia & Herzegovina", "Qatar"], "C": ["Brazil", "Morocco", "Scotland", "Haiti"], "D": ["USA", "Australia", "Paraguay", "Turkey"], "E": ["Germany", "Ivory Coast", "Ecuador", "Cura\u00e7ao"], "F": ["Netherlands", "Japan", "Sweden", "Tunisia"], "G": ["Egypt", "Iran", "Belgium", "New Zealand"], "H": ["Spain", "Uruguay", "Cape Verde", "Saudi Arabia"], "I": ["France", "Norway", "Senegal", "Iraq"], "J": ["Argentina", "Austria", "Algeria", "Jordan"], "K": ["Portugal", "Colombia", "DR Congo", "Uzbekistan"], "L": ["England", "Ghana", "Panama", "Croatia"]};
+
+// ═══════════════════════════════════════════════════════
+// SIMULATION ENGINE
+// ═══════════════════════════════════════════════════════
+var simDone=false;
+
+// FIFA rankings Jun 11 2026 (official)
+var FIFA_RANK={
+  'Argentina':1,'Spain':2,'France':3,'England':4,'Portugal':5,
+  'Brazil':6,'Netherlands':7,'Belgium':8,'Germany':9,'Morocco':10,
+  'Croatia':12,'Uruguay':13,'Mexico':14,'Colombia':15,
+  'Japan':16,'USA':17,'Norway':18,'Austria':19,'Senegal':20,
+  'Switzerland':21,'Ecuador':22,'Egypt':24,'Australia':25,
+  'South Korea':26,'Turkey':27,'Algeria':28,'Canada':30,
+  'Ghana':32,'Tunisia':35,'Czech Republic':36,'Scotland':38,
+  'Iran':40,'Paraguay':42,'Sweden':43,'Ivory Coast':44,
+  'Qatar':48,'Panama':52,'Saudi Arabia':56,'DR Congo':58,
+  'South Africa':60,'Iraq':62,'Bosnia & Herzegovina':65,
+  'Uzbekistan':75,'Curacao':78,'Jordan':88,'Cape Verde':90,
+  'New Zealand':95,'Haiti':110
+};
+
+function fifaStrength(name){
+  var rank=FIFA_RANK[fix(name)]||80;
+  return 1/Math.pow(rank,0.45);
+}
+
+function tournamentForm(name){
+  if(!standings)return 1;
+  var n=fix(name),grpId=gp(n);
+  if(!grpId||!standings[grpId])return 1;
+  var t=standings[grpId].find(function(x){return fix(x.name)===n;});
+  if(!t||t.pj===0)return 1;
+  var ppg=t.pts/t.pj;
+  var gdpg=(t.gf-t.gc)/t.pj;
+  return 0.8+ppg*0.12+gdpg*0.04;
+}
+
+function teamStrength(name){
+  return fifaStrength(name)*0.5+fifaStrength(name)*tournamentForm(name)*0.5;
+}
+
+function simMatch(t1,t2){
+  if(!t1)return t2;
+  if(!t2)return t1;
+  var s1=teamStrength(t1),s2=teamStrength(t2);
+  return Math.random()<s1/(s1+s2)?t1:t2;
+}
+
+function runSimulation(){
+  if(!standings||!matches)return;
+  document.getElementById('simStatus').textContent='Simulando 10.000 torneos...';
+  setTimeout(function(){
+    var N=10000;
+
+    // matchWins[round][matchIdx][team] = total times team won (across all opponents)
+    // matchPairs[round][matchIdx]["a|b"] = times pair played
+    // pairWins[round][matchIdx]["a|b"] = {a: x, b: y}  wins per team within that pair
+    var matchWins=[]; var matchPairs=[]; var pairWins=[];
+    for(var r=0;r<5;r++){matchWins.push([]);matchPairs.push([]);pairWins.push([]);}
+
+    function getR32Pairs(){
+      var thirds=[];
+      'ABCDEFGHIJKL'.split('').forEach(function(g){
+        if(standings[g]&&standings[g][2])thirds.push(standings[g][2].name);
+      });
+      thirds.sort(function(a,b){
+        var ga=gp(fix(a)),gb=gp(fix(b));
+        var ta=ga&&standings[ga]?standings[ga].find(function(x){return x.name===a;}):null;
+        var tb=gb&&standings[gb]?standings[gb].find(function(x){return x.name===b;}):null;
+        return (tb?tb.pts:0)-(ta?ta.pts:0);
+      });
+      var ti=0;
+      var raw=[
+        [sl(0,'E'),null],
+        [sl(0,'I'),null],
+        [sl(1,'A'),sl(1,'B')],
+        [sl(0,'F'),sl(1,'C')],
+        [sl(0,'C'),sl(1,'F')],
+        [sl(1,'E'),sl(1,'I')],
+        [sl(0,'A'),null],
+        [sl(0,'L'),null],
+        [sl(1,'K'),sl(1,'L')],
+        [sl(0,'H'),sl(1,'J')],
+        [sl(0,'D'),null],
+        [sl(0,'G'),null],
+        [sl(0,'J'),sl(1,'H')],
+        [sl(1,'D'),sl(1,'G')],
+        [sl(0,'B'),null],
+        [sl(0,'K'),null],
+      ];
+      return raw.map(function(p){
+        var t1=p[0]?p[0].name:null;
+        var t2=p[1]?p[1].name:null;
+        if(!t1&&thirds[ti])t1=thirds[ti++];
+        if(!t2&&thirds[ti])t2=thirds[ti++];
+        return [t1,t2];
+      });
+    }
+
+    var r16idx=[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[12,13],[14,15]];
+    var qfidx=[[0,1],[2,3],[4,5],[6,7]];
+    var sfidx=[[0,1],[2,3]];
+
+    for(var i=0;i<16;i++){matchWins[0].push({});matchPairs[0].push({});pairWins[0].push({});}
+    for(var i=0;i<8;i++){matchWins[1].push({});matchPairs[1].push({});pairWins[1].push({});}
+    for(var i=0;i<4;i++){matchWins[2].push({});matchPairs[2].push({});pairWins[2].push({});}
+    for(var i=0;i<2;i++){matchWins[3].push({});matchPairs[3].push({});pairWins[3].push({});}
+    matchWins[4].push({});matchPairs[4].push({});pairWins[4].push({});
+
+    function pairKey(a,b){
+      if(!a||!b)return null;
+      return a<b ? a+'|'+b : b+'|'+a;
+    }
+
+    function recordMatch(round,idx,t1,t2,winner){
+      if(winner)matchWins[round][idx][winner]=(matchWins[round][idx][winner]||0)+1;
+      var k=pairKey(t1,t2);
+      if(!k)return;
+      matchPairs[round][idx][k]=(matchPairs[round][idx][k]||0)+1;
+      if(!pairWins[round][idx][k])pairWins[round][idx][k]={};
+      if(winner)pairWins[round][idx][k][winner]=(pairWins[round][idx][k][winner]||0)+1;
+    }
+
+    for(var sim=0;sim<N;sim++){
+      var pairs=getR32Pairs();
+      var r32w=pairs.map(function(p,i){var w=simMatch(p[0],p[1]);recordMatch(0,i,p[0],p[1],w);return w;});
+      var r16w=r16idx.map(function(p,i){var t1=r32w[p[0]],t2=r32w[p[1]],w=simMatch(t1,t2);recordMatch(1,i,t1,t2,w);return w;});
+      var qfw =qfidx.map(function(p,i){var t1=r16w[p[0]],t2=r16w[p[1]],w=simMatch(t1,t2);recordMatch(2,i,t1,t2,w);return w;});
+      var sfw =sfidx.map(function(p,i){var t1=qfw[p[0]], t2=qfw[p[1]], w=simMatch(t1,t2);recordMatch(3,i,t1,t2,w);return w;});
+      var champ=simMatch(sfw[0],sfw[1]);recordMatch(4,0,sfw[0],sfw[1],champ);
+    }
+
+    renderSimulation(matchWins,matchPairs,pairWins,N);
+    simDone=true;
+  },50);
+}
+function topTeam(matchWin,N){
+  var best=null,bestC=0;
+  Object.keys(matchWin).forEach(function(t){if(matchWin[t]>bestC){bestC=matchWin[t];best=t;}});
+  return best?{name:best,pct:Math.round(bestC/N*100)}:null;
+}
+
+function simMatchCard(mw,mp,pw,N,matchNum,extraCls){
+  // Pick the most likely PAIR for this match
+  var pairs=Object.keys(mp).sort(function(a,b){return mp[b]-mp[a];});
+  var t1=null,t2=null;
+  if(pairs.length){
+    var top=pairs[0].split('|');
+    var nA=top[0],nB=top[1];
+    var pairTotal=mp[pairs[0]];
+    var pwForPair=pw[pairs[0]]||{};
+    var wA=pwForPair[nA]||0;
+    var wB=pwForPair[nB]||0;
+    var pctA=pairTotal?Math.round(wA/pairTotal*100):0;
+    var pctB=pairTotal?Math.round(wB/pairTotal*100):0;
+    if(pctA>=pctB){t1={name:nA,pct:pctA};t2={name:nB,pct:pctB};}
+    else{t1={name:nB,pct:pctB};t2={name:nA,pct:pctA};}
+  } else {
+    var teams=Object.keys(mw).sort(function(a,b){return mw[b]-mw[a];}).slice(0,2);
+    t1=teams[0]?{name:teams[0],pct:Math.round(mw[teams[0]]/N*100)}:null;
+    t2=teams[1]?{name:teams[1],pct:Math.round(mw[teams[1]]/N*100)}:null;
+  }
+  var cls='sim-match'+(extraCls?' '+extraCls:'');
+  var html='<div class="'+cls+'" data-match="'+matchNum+'">';
+  if(matchNum)html+='<div class="bnum">P'+matchNum+'</div>';
+  [[t1,'#00C67A'],[t2,'#3b82f6']].forEach(function(pair){
+    var t=pair[0],col=pair[1];
+    if(!t){html+='<div class="sim-slot"><div class="sim-team"><span class="sim-name" style="color:var(--muted);font-style:italic">Por definir</span></div></div>';return;}
+    html+='<div class="sim-slot">'
+      +'<div class="sim-team"><span class="sim-name"><span style="font-size:12px">'+fl(t.name)+'</span>'+en(t.name)+'</span><span class="sim-pct" style="color:'+col+'">'+t.pct+'%</span></div>'
+      +'<div class="sim-bar-track"><div class="sim-bar-fill" style="width:'+Math.min(100,t.pct)+'%;background:'+col+'"></div></div>'
+      +'</div>';
+  });
+  html+='</div>';
+  return html;
+}
+
+
+var R32_NUMS=[74,77,73,75,76,78,79,80,83,84,81,82,86,88,85,87];
+var R16_NUMS=[89,90,91,92,93,94,95,96];
+var QF_NUMS =[97,98,99,100];
+var SF_NUMS =[101,102];
+
+function renderSimulation(matchWins,matchPairs,pairWins,N){
+  document.getElementById('simStatus').style.display='none';
+  document.getElementById('simBracket').style.display='';
+  var wrap=document.querySelector('.sim-wrap');
+  var el=document.getElementById('simRounds');
+  el.innerHTML='';
+
+  // Build rounds (all except final/champ)
+  var rounds=[
+    {label:'16AVOS DE FINAL', mw:matchWins[0], mp:matchPairs[0], pw:pairWins[0], nums:R32_NUMS, hdrCls:''},
+    {label:'8VOS DE FINAL',   mw:matchWins[1], mp:matchPairs[1], pw:pairWins[1], nums:R16_NUMS, hdrCls:''},
+    {label:'CUARTOS DE FINAL',mw:matchWins[2], mp:matchPairs[2], pw:pairWins[2], nums:QF_NUMS,  hdrCls:''},
+    {label:'SEMIFINALES',     mw:matchWins[3], mp:matchPairs[3], pw:pairWins[3], nums:SF_NUMS,  hdrCls:''},
+  ];
+
+  rounds.forEach(function(r){
+    var col=document.createElement('div');
+    col.className='sim-round';
+    var html='<div class="sim-round-hdr '+r.hdrCls+'">'+r.label+'</div><div class="sim-matches">';
+    r.mw.forEach(function(mw,i){ html+=simMatchCard(mw,r.mp[i],r.pw[i],N,r.nums[i],''); });
+    html+='</div>';
+    col.innerHTML=html;
+    el.appendChild(col);
+  });
+
+  // ── FINAL column (1 match, centred) ──
+  var finCol=document.createElement('div');
+  finCol.className='sim-round';
+  var champMW=matchWins[4][0];
+  var finHtml='<div class="sim-round-hdr is-final-hdr">FINAL</div>'
+    +'<div class="sim-matches" style="justify-content:center">'
+    +simMatchCard(champMW,matchPairs[4][0],pairWins[4][0],N,104,'is-final-match')
+    +'</div>';
+  finCol.innerHTML=finHtml;
+  el.appendChild(finCol);
+
+  // ── CAMPEON column ──
+  var top3=Object.keys(champMW).sort(function(a,b){return champMW[b]-champMW[a];}).slice(0,3);
+  var champ=top3[0]?{name:top3[0],pct:Math.round(champMW[top3[0]]/N*100)}:null;
+  var champCol=document.createElement('div');
+  champCol.className='sim-round';
+  var champHtml='<div class="sim-round-hdr is-champ-hdr">CAMPE\u00d3N</div><div class="sim-matches" style="justify-content:center">';
+  if(champ){
+    champHtml+='<div class="sim-final-winner">'
+      +'<div class="sim-trophy">\ud83c\udfc6</div>'
+      +'<div class="sim-winner-name">'+fl(champ.name)+' '+en(champ.name)+'</div>'
+      +'<div class="sim-winner-pct">'+champ.pct+'% de probabilidad</div>';
+    if(top3[1]){
+      champHtml+='<div class="sim-others"><div class="sim-others-label">Otros candidatos</div>';
+      top3.slice(1).forEach(function(t){
+        var p=Math.round(champMW[t]/N*100);
+        champHtml+='<div class="sim-slot"><div class="sim-team"><span class="sim-name"><span style="font-size:11px">'+fl(t)+'</span>'+en(t)+'</span><span class="sim-pct" style="color:#f59e0b">'+p+'%</span></div>'
+          +'<div class="sim-bar-track"><div class="sim-bar-fill" style="width:'+Math.min(100,p*4)+'%;background:#f59e0b"></div></div></div>';
+      });
+      champHtml+='</div>';
+    }
+    champHtml+='</div>';
+  }
+  champHtml+='</div>';
+  champCol.innerHTML=champHtml;
+  el.appendChild(champCol);
+
+  // ── Draw funnel connector lines via SVG ──
+  requestAnimationFrame(function(){
+    drawFunnelLines(el);
+  });
+}
+
+function drawFunnelLines(el){
+  // el = #simRounds (the flex container)
+  // parent = .sim-wrap (the scroll+position:relative container)
+  var wrap = el.parentNode;
+
+  var existing = wrap.querySelector('.sim-funnel-svg');
+  if(existing) wrap.removeChild(existing);
+
+  // Size the SVG to cover the full scrollable area of sim-rounds
+  var W = el.scrollWidth;
+  var H = el.scrollHeight;
+
+  var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('class','sim-funnel-svg');
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:1';
+
+  var STROKE = 'rgba(0,198,122,0.25)';
+  var SW = 1.5;
+
+  // Get position of a card relative to el (sim-rounds)
+  function getPos(card){
+    var x=0, y=0, node=card;
+    while(node && node !== el){
+      x += node.offsetLeft;
+      y += node.offsetTop;
+      node = node.offsetParent;
+    }
+    return { x:x, y:y, w:card.offsetWidth, h:card.offsetHeight };
+  }
+  function rMid(card){ var p=getPos(card); return {x:p.x+p.w, y:p.y+p.h/2}; }
+  function lMid(card){ var p=getPos(card); return {x:p.x,     y:p.y+p.h/2}; }
+
+  function seg(x1,y1,x2,y2){
+    if(Math.abs(x1-x2)<0.5 && Math.abs(y1-y2)<0.5) return;
+    var l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',Math.round(x1)); l.setAttribute('y1',Math.round(y1));
+    l.setAttribute('x2',Math.round(x2)); l.setAttribute('y2',Math.round(y2));
+    l.setAttribute('stroke',STROKE); l.setAttribute('stroke-width',SW);
+    l.setAttribute('stroke-linecap','round');
+    svg.appendChild(l);
+  }
+
+  var pairings=[
+    [[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[12,13],[14,15]],
+    [[0,1],[2,3],[4,5],[6,7]],
+    [[0,1],[2,3]],
+    [[0,1]]
+  ];
+
+  var rounds = el.querySelectorAll('.sim-round');
+
+  for(var ri=0; ri<4; ri++){
+    var fromRound = rounds[ri];
+    var toRound   = rounds[ri+1];
+    if(!fromRound||!toRound) continue;
+
+    var fromCards = fromRound.querySelectorAll('.sim-match');
+    var toCards   = toRound.querySelectorAll('.sim-match');
+
+    pairings[ri].forEach(function(pair, toIdx){
+      var cA=fromCards[pair[0]], cB=fromCards[pair[1]], cTo=toCards[toIdx];
+      if(!cA||!cB||!cTo) return;
+
+      var pA = rMid(cA);
+      var pB = rMid(cB);
+      var pT = lMid(cTo);
+
+      var midX   = Math.round((pA.x + pT.x) / 2);
+      var mergeY = Math.round((pA.y + pB.y) / 2);
+
+      seg(pA.x, pA.y, midX,  pA.y);   // horiz from A → spine
+      seg(pB.x, pB.y, midX,  pB.y);   // horiz from B → spine
+      seg(midX, pA.y, midX,  pB.y);   // vertical spine
+      seg(midX, mergeY, pT.x, mergeY); // horiz from spine → target
+      if(Math.abs(pT.y - mergeY) > 1)
+        seg(pT.x, mergeY, pT.x, pT.y); // vertical align to target mid
+    });
+  }
+
+  // Insert SVG into wrap (behind the rounds div)
+  wrap.insertBefore(svg, el);
+}
+
 applyData(FALLBACK,'embedded');
 function tryFetch(){fetch(API+'?_='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){applyData(d,'live');}).catch(function(){});}
 tryFetch();setInterval(tryFetch,300000);
